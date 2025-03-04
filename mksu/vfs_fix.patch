@@ -7,7 +7,7 @@
 -
 +bool ksu_vfs_read_hook = true;
 +bool ksu_execveat_hook = true;
-+bool ksu_input_hook = true;\n\
++bool ksu_input_hook = true;
 +EXPORT_SYMBOL(ksu_vfs_read_hook);
 +EXPORT_SYMBOL(ksu_execveat_hook);
 +EXPORT_SYMBOL(ksu_input_hook);
