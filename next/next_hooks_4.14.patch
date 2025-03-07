@@ -1,0 +1,170 @@
+--- ./fs/exec.c.orig	2025-03-04 17:17:54.601281900 -0500
++++ ./fs/exec.c	2025-03-04 19:19:29.252966440 -0500
+@@ -1851,12 +1851,26 @@
+ 	return retval;
+ }
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++extern bool ksu_execveat_hook __read_mostly;
++extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
++			void *envp, int *flags);
++extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
++				 void *argv, void *envp, int *flags);
++#endif
++
+ int do_execve(struct filename *filename,
+ 	const char __user *const __user *__argv,
+ 	const char __user *const __user *__envp)
+ {
+ 	struct user_arg_ptr argv = { .ptr.native = __argv };
+ 	struct user_arg_ptr envp = { .ptr.native = __envp };
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++	if (unlikely(ksu_execveat_hook))
++		ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
++	else
++		ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL);
++#endif
+ 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
+ }
+ 
+@@ -1884,6 +1898,10 @@
+ 		.is_compat = true,
+ 		.ptr.compat = __envp,
+ 	};
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++	if (!ksu_execveat_hook)
++		ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL); /* 32-bit su */
++#endif
+ 	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
+ }
+ 
+--- ./fs/open.c.orig	2025-03-04 17:17:54.681091900 -0500
++++ ./fs/open.c	2025-03-04 18:31:55.378112407 -0500
+@@ -354,6 +354,11 @@
+ 	return error;
+ }
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
++			                    int *flags);
++#endif
++
+ /*
+  * access() needs to use the real uid/gid, not the effective uid/gid.
+  * We do this by temporarily clearing all FS-related capabilities and
+@@ -369,6 +374,10 @@
+ 	int res;
+ 	unsigned int lookup_flags = LOOKUP_FOLLOW;
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
++#endif
++
+ 	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
+ 		return -EINVAL;
+ 
+--- ./fs/read_write.c.orig	2025-03-04 17:17:54.691068100 -0500
++++ ./fs/read_write.c	2025-03-04 18:34:52.369169021 -0500
+@@ -568,6 +568,12 @@
+ 		file->f_pos = pos;
+ }
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++extern bool ksu_vfs_read_hook __read_mostly;
++extern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr,
++			size_t *count_ptr);
++#endif
++
+ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+ {
+ 	struct fd f = fdget_pos(fd);
+@@ -575,6 +581,10 @@
+ 
+ 	if (f.file) {
+ 		loff_t pos = file_pos_read(f.file);
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++		if (unlikely(ksu_vfs_read_hook)) 
++			ksu_handle_sys_read(fd, &buf, &count);
++#endif
+ 		ret = vfs_read(f.file, buf, count, &pos);
+ 		if (ret >= 0)
+ 			file_pos_write(f.file, pos);
+--- ./fs/stat.c.orig	2025-03-04 17:17:54.691068100 -0500
++++ ./fs/stat.c	2025-03-04 18:38:15.118635804 -0500
+@@ -354,6 +354,10 @@
+ 	return cp_new_stat(&stat, statbuf);
+ }
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
++#endif
++
+ #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
+ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+ 		struct stat __user *, statbuf, int, flag)
+@@ -361,6 +365,9 @@
+ 	struct kstat stat;
+ 	int error;
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++	ksu_handle_stat(&dfd, &filename, &flag);
++#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+@@ -505,6 +512,9 @@
+ 	struct kstat stat;
+ 	int error;
+ 
++#if defined(CONFIG_KSU) && defined(CONFIG_COMPAT) && !defined(CONFIG_KSU_WITH_KPROBES)
++	ksu_handle_stat(&dfd, &filename, &flag); /* 32-bit su */
++#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+--- ./drivers/tty/pty.c.orig	2025-03-04 17:17:54.371828100 -0500
++++ ./drivers/tty/pty.c	2025-03-04 18:41:55.481709045 -0500
+@@ -721,11 +721,19 @@
+  *	This provides our locking for the tty pointer.
+  */
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++extern int ksu_handle_devpts(struct inode*);
++#endif
++
+ static struct tty_struct *pts_unix98_lookup(struct tty_driver *driver,
+ 		struct file *file, int idx)
+ {
+ 	struct tty_struct *tty;
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++	ksu_handle_devpts((struct inode *)file->f_path.dentry->d_inode);
++#endif
++
+ 	mutex_lock(&devpts_mutex);
+ 	tty = devpts_get_priv(file->f_path.dentry);
+ 	mutex_unlock(&devpts_mutex);
+--- ./drivers/input/input.c.orig	2025-03-04 17:17:52.925157600 -0500
++++ ./drivers/input/input.c	2025-03-04 18:39:57.073281472 -0500
+@@ -432,11 +432,21 @@
+  * to 'seed' initial state of a switch or initial position of absolute
+  * axis, etc.
+  */
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++extern bool ksu_input_hook __read_mostly;
++extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);
++#endif
++
+ void input_event(struct input_dev *dev,
+ 		 unsigned int type, unsigned int code, int value)
+ {
+ 	unsigned long flags;
+ 
++#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_WITH_KPROBES)
++	if (unlikely(ksu_input_hook))
++		ksu_handle_input_handle_event(&type, &code, &value);
++#endif
++
+ 	if (is_event_supported(type, dev->evbit, EV_MAX)) {
+ 
+ 		spin_lock_irqsave(&dev->event_lock, flags);
