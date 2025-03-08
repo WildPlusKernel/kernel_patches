@@ -1,7 +1,5 @@
-diff --git a/kernel/apk_sign.c b/kernel/apk_sign.c
-index 1f888b1e..c8790695 100644
---- a/kernel/apk_sign.c
-+++ b/kernel/apk_sign.c
+--- KernelSU/kernel/apk_sign.c	2025-03-08 13:11:48.464452882 +0800
++++ KernelSU_modify/kernel/apk_sign.c	2025-03-08 13:14:22.443848429 +0800
 @@ -314,7 +314,16 @@
  
  #endif
@@ -12,13 +10,13 @@ index 1f888b1e..c8790695 100644
 +#ifdef CONFIG_KSU_SUSFS
 +	return (check_v2_signature(path, EXPECTED_NEXT_SIZE, EXPECTED_NEXT_HASH) 
 +	|| check_v2_signature(path, 0x033b, "c371061b19d8c7d7d6133c6a9bafe198fa944e50c1b31c9d8daa8d7f1fc2d2d6") // stock
++	|| check_v2_signature(path, 0x363, "4359c171f32543394cbc23ef908c4bb94cad7c8087002ba164c8230948c21549") // backslashxx
 +	|| check_v2_signature(path, 384, "7e0c6d7278a3bb8e364e0fcba95afaf3666cf5ff3c245a3b63c8833bd0445cc4") // 5ec1cff
++	|| check_v2_signature(path, 0x396, "f415f4ed9435427e1fdf7f1fccd4dbc07b3d6b8751e4dbcec6f19671f427870b") // rsuntk
 +	);
 +#else
- 	return check_v2_signature(path, EXPECTED_NEXT_SIZE, EXPECTED_NEXT_HASH);
-+#endif
- }
+ 	return check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH);
+-}
 \ No newline at end of file
-
-
-
++#endif
++}
