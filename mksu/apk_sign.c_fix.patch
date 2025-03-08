@@ -1,5 +1,5 @@
---- KernelSU/kernel/apk_sign.c	2025-03-08 13:11:48.464452882 +0800
-+++ KernelSU_modify/kernel/apk_sign.c	2025-03-08 13:14:22.443848429 +0800
+--- a/kernel/apk_sign.c	2025-03-08 13:11:48.464452882 +0800
++++ b/kernel/apk_sign.c	2025-03-08 13:14:22.443848429 +0800
 @@ -314,7 +314,16 @@
  
  #endif
