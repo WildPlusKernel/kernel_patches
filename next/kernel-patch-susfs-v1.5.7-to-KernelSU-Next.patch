@@ -1597,5 +1597,6 @@ index 5d7f4770..428c737d 100644
  
 -void track_throne();
 +void ksu_track_throne();
+
  
  #endif
